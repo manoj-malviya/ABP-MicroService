@@ -1,0 +1,127 @@
+version: "3"
+services:
+  base-service: 
+    container_name: baseService
+    image: mcr.microsoft.com/dotnet/sdk:6.0
+    command: dotnet run
+    volumes:
+      - ./BaseService/:/usr/src/app
+    working_dir: /usr/src/app/BaseService.Host
+    expose:
+      - 55389
+    depends_on:
+      - redis-server
+      - es-server
+      - mssql-server
+      - rabbitmq-server
+  auth-server:
+    container_name: authServer
+    image: mcr.microsoft.com/dotnet/sdk:6.0
+    command: dotnet run
+    volumes:
+      - ./AuthServer/IdentityServer/AuthServer.Host/:/usr/src/app
+    working_dir: /usr/src/app
+    environment:
+      - ConnectionStrings__Default=Server=mssql-server;Database=ABP;Trusted_Connection=True;
+      - ElasticSearch__Url=http://es-server:9200
+      - Redis__Configuration=redis-server
+      - RabbitMQ__Connections__Default__HostName=rabbitmq-server
+      - RabbitMQ__EventBus__ClientName=MsDemo_AuthServer
+      - RabbitMQ__EventBus__ExchangeName=MsDemo
+    depends_on:
+      - redis-server
+      - es-server
+      - mssql-server
+      - rabbitmq-server
+  business-server:
+    container_name: businessServer
+    image: mcr.microsoft.com/dotnet/sdk:6.0
+    command: dotnet run
+    volumes:
+      - ./MicroServices/Business//:/usr/src/app
+    working_dir: /usr/src/app/Business.Host
+    depends_on:
+      - redis-server
+      - es-server
+      - mssql-server
+      - rabbitmq-server
+  file-server:
+    container_name: fileServer
+    image: mcr.microsoft.com/dotnet/sdk:6.0
+    command: dotnet run
+    volumes:
+      - ./MicroServices/FileStorage/:/usr/src/app
+    working_dir: /usr/src/app/FileStorage.Host
+    depends_on:
+      - redis-server
+      - es-server
+      - mssql-server
+      - rabbitmq-server
+  gateway-server:
+    container_name: gatewayServer
+    image: mcr.microsoft.com/dotnet/sdk:6.0
+    command: dotnet run
+    volumes:
+      - ./Gateways/WebAppGateway/WebAppGateway.Host:/usr/src/app
+    working_dir: /usr/src/app
+    depends_on:
+      - file-server
+      - base-service
+      - auth-server
+      - business-server
+  web:
+    container_name: wabApp
+    image: node:14-slim
+    working_dir: /usr/src/app
+    command: npm run dev
+    volumes:
+      - ./WebApp/vue:/usr/src/app
+    depends_on:
+      - gateway-server
+    ports:
+      - 9527:9527
+  redis-server:
+    container_name: redisServer
+    image: redis:5
+  es-server:
+    container_name: esServer
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.10.0-amd64
+    environment:
+      - node.name=es01
+      - cluster.name=es-docker-cluster
+      # - cluster.initial_master_nodes=es01
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - discovery.type=single-node
+      # - xpack.security.enabled=false
+    ports:
+      - 9200:9200
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - esdata1:/usr/share/elasticsearch/data
+  rabbitmq-server:
+    image: rabbitmq
+    command: rabbitmq-server
+    expose:
+      - 5672
+      - 15672
+    healthcheck:
+      test: [ "CMD", "nc", "-z", "localhost", "5672" ]
+      interval: 5s
+      timeout: 15s
+      retries: 1
+  mssql-server:
+    image: 'mcr.microsoft.com/mssql/server'
+    ports:
+        - '1433:1433'
+    volumes:
+      - ./sql/SQLServer/:/usr/src/app
+    command: sh /usr/src/app/entrypoint.sh
+    environment:
+        - ACCEPT_EULA=Y
+        - SA_PASSWORD=Secret1234
+volumes:
+  esdata1:

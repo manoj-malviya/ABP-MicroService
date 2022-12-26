@@ -1,0 +1,20 @@
+version: '2'
+services:
+  base:
+    image: node:14-slim
+    volumes:
+      - ./WebApp/vue:/usr/src/app
+    working_dir: /usr/src/app
+    # command: bash -c "apt-get update -y && apt-get install git -y"
+  install:
+    extends:
+      service: base
+    command: bash -c "apt-get update -y && apt-get -y install procps && apt-get install git -y && npm i"
+  # prebuild:
+  #   extends:
+  #     service: install
+  #   command: npm run gulp-default:local
+  # build:
+  #   extends:
+  #     service: prebuild
+  #   command: npm run build:local

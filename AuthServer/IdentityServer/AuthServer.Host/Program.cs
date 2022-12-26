@@ -33,6 +33,7 @@ namespace AuthServer.Host
             }
             finally
             {
+                Log.Fatal("AuthServer.Host terminated unexpectedly!");
                 Log.CloseAndFlush();
             }
         }
